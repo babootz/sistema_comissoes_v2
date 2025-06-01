@@ -70,7 +70,7 @@ if logs.empty:
 # ---------- IMPORTAÇÃO DA PLANILHA ---------- #
 file = st.file_uploader("Importar Planilha (XLSX)", type=["xlsx"])
 if file is not None:
-    df_importado = pd.read_excel(file)
+    df_importado = pd.read_excel(file, engine='openpyxl')
     st.write("Planilha importada com sucesso!")
     st.dataframe(df_importado)
     # Salvar a planilha importada
