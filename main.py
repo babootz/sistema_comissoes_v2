@@ -1,8 +1,6 @@
 # app.py
 import streamlit as st
 import pandas as pd
-import base64
-import requests
 import datetime
 import uuid
 import os
@@ -47,7 +45,6 @@ ARQUIVOS = {
     "logs": "logs.csv"
 }
 
-# Função para carregar arquivo de forma segura
 def carregar_arquivo(nome):
     if os.path.exists(ARQUIVOS[nome]):
         df = pd.read_csv(ARQUIVOS[nome])
@@ -56,9 +53,9 @@ def carregar_arquivo(nome):
         return pd.DataFrame(), None
 
 # ---------- CARREGAR DADOS ---------- #
-vendas, vendas_sha = carregar_arquivo("vendas")
-pagamentos, pagamentos_sha = carregar_arquivo("pagamentos")
-logs, logs_sha = carregar_arquivo("logs")
+vendas, _ = carregar_arquivo("vendas")
+pagamentos, _ = carregar_arquivo("pagamentos")
+logs, _ = carregar_arquivo("logs")
 
 if vendas.empty:
     vendas = pd.DataFrame(columns=["id", "segurado", "placa", "data", "seguradora", "premio_liquido", "percentual", "comissao_caio", "status", "observacao"])
@@ -67,16 +64,13 @@ if pagamentos.empty:
 if logs.empty:
     logs = pd.DataFrame(columns=["data_hora", "tipo_acao", "id_venda", "descricao"])
 
-# ---------- REMOVIDA A PARTE DE IMPORTAÇÃO DE PLANILHA ---------- #
-
-# ---------- FUNÇÃO PARA CALCULAR COMISSÃO (exemplo) ---------- #
-def calcular_comissao_caio(premio_liquido, percentual):
-    return premio_liquido * percentual / 100
-
 # ---------- INTERFACE PRINCIPAL ---------- #
 st.markdown("""
     <h2 style='text-align: center;'>📋 Cadastrar Nova Venda</h2>
 """, unsafe_allow_html=True)
+
+def calcular_comissao_caio(valor, percentual):
+    return round((valor * percentual / 100), 2)
 
 with st.form("nova_venda"):
     col1, col2, col3 = st.columns(3)
@@ -94,12 +88,11 @@ with st.form("nova_venda"):
     submitted = st.form_submit_button("Salvar Venda")
     if submitted and segurado:
         comissao_caio = calcular_comissao_caio(premio_liquido, percentual)
-        data_formatada = data.strftime("%d/%m/%Y")  # formata a data para dd/mm/aaaa
         nova_venda = {
             "id": str(uuid.uuid4()),
             "segurado": segurado,
             "placa": placa,
-            "data": data_formatada,
+            "data": data.strftime("%d/%m/%Y"),
             "seguradora": seguradora,
             "premio_liquido": premio_liquido,
             "percentual": percentual,
@@ -127,7 +120,12 @@ for index, row in vendas.iterrows():
         st.write(f"Observações: {row['observacao']}")
 
         if st.button("🗑️ Excluir Venda", key=f"excluir_{index}"):
-            if st.confirm("Tem certeza que deseja excluir esta venda?"):
+            confirmar = st.radio(
+                f"Tem certeza que deseja excluir esta venda de {row['segurado']}?",
+                ["Não", "Sim"],
+                key=f"confirmar_excluir_{index}"
+            )
+            if confirmar == "Sim":
                 vendas = vendas.drop(index)
                 pagamentos = pagamentos[pagamentos['id_venda'] != row['id']]
                 logs = pd.concat([logs, pd.DataFrame.from_records([{
@@ -144,7 +142,6 @@ for index, row in vendas.iterrows():
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
 if st.button("Baixar Dashboard como Excel"):
     output_excel = vendas.copy()
-    # Já está em string no formato dd/mm/aaaa, então não precisa formatar
     output_excel.to_excel("dashboard_comissoes.xlsx", index=False)
     st.success("Arquivo Excel gerado com sucesso!")
     st.download_button(
