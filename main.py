@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 import uuid
 import os
+from io import BytesIO
 
 # ---------- CONFIGURAÇÃO INICIAL ---------- #
 st.set_page_config(page_title="Gerenciamento de Comissões", layout="wide", page_icon="🔐")
@@ -93,7 +94,7 @@ with st.form("nova_venda"):
             "id": str(uuid.uuid4()),
             "segurado": segurado,
             "placa": placa,
-            "data": data.strftime("%d/%m/%Y"),  # formato dd/mm/aaaa
+            "data": data.strftime("%d/%m/%Y"),  # salva como string dd/mm/aaaa
             "seguradora": seguradora,
             "premio_liquido": premio_liquido,
             "percentual": percentual,
@@ -111,6 +112,7 @@ with st.form("nova_venda"):
         vendas.to_csv(ARQUIVOS["vendas"], index=False)
         logs.to_csv(ARQUIVOS["logs"], index=False)
         st.success("Venda salva com sucesso!")
+        st.experimental_rerun()
 
 # ---------- EXCLUSÃO DE VENDAS ---------- #
 for index, row in vendas.iterrows():
@@ -120,8 +122,9 @@ for index, row in vendas.iterrows():
         st.write(f"Comissão Caio: R${row['comissao_caio']:.2f}")
         st.write(f"Observações: {row['observacao']}")
 
-        if st.button("🗑️ Excluir Venda", key=f"excluir_{index}"):
-            # Mostrar confirmação customizada (usando modal improvisado)
+        excluir_btn = st.button("🗑️ Excluir Venda", key=f"excluir_{index}")
+        if excluir_btn:
+            # Confirmação simples
             confirmar = st.checkbox("Confirmar exclusão", key=f"confirmar_{index}")
             if confirmar:
                 vendas = vendas.drop(index).reset_index(drop=True)
@@ -141,13 +144,20 @@ for index, row in vendas.iterrows():
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
 if st.button("Baixar Dashboard como Excel"):
     output_excel = vendas.copy()
-    # Converter data de string dd/mm/aaaa para formato datetime para formatação correta
+    # a coluna data já está string no formato dd/mm/aaaa, converta para datetime para o Excel
     output_excel['data'] = pd.to_datetime(output_excel['data'], dayfirst=True, errors='coerce')
     output_excel['Data'] = output_excel['data'].dt.strftime('%d/%m/%Y')
     output_excel = output_excel.drop(columns=['data'])
+
+    # Gerar Excel em memória para download
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        output_excel.to_excel(writer, index=False)
+    buffer.seek(0)
+
     st.download_button(
         label="Download Excel",
-        data=output_excel.to_excel(index=False, engine='openpyxl'),
+        data=buffer,
         file_name="dashboard_comissoes.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
