@@ -1,4 +1,4 @@
-# app.py
+# main.py
 import streamlit as st
 import pandas as pd
 import datetime
@@ -38,36 +38,35 @@ if senha == login_senha:
 if not login_status:
     st.stop()
 
-# ---------- FUNÇÕES DE CARREGAMENTO DE ARQUIVOS ---------- #
+# ---------- CONFIGURAÇÃO DOS ARQUIVOS ---------- #
 ARQUIVOS = {
     "vendas": "vendas.csv",
     "pagamentos": "pagamentos.csv",
     "logs": "logs.csv"
 }
 
-# Função para carregar arquivo de forma segura
-def carregar_arquivo(nome):
-    if os.path.exists(ARQUIVOS[nome]):
-        df = pd.read_csv(ARQUIVOS[nome])
-        return df, None
+COLUNAS_PADRAO = {
+    "vendas": ["id", "segurado", "placa", "data", "seguradora", "premio_liquido", "percentual", "comissao_caio", "status", "observacao"],
+    "pagamentos": ["id", "id_venda", "valor_pago", "data_pagamento", "observacao"],
+    "logs": ["data_hora", "tipo_acao", "id_venda", "descricao"]
+}
+
+def carregar_ou_criar(nome):
+    arquivo = ARQUIVOS[nome]
+    if os.path.exists(arquivo):
+        df = pd.read_csv(arquivo)
     else:
-        return pd.DataFrame(), None
+        df = pd.DataFrame(columns=COLUNAS_PADRAO[nome])
+        df.to_csv(arquivo, index=False)
+    return df
 
-# ---------- CARREGAR DADOS ---------- #
-vendas, vendas_sha = carregar_arquivo("vendas")
-pagamentos, pagamentos_sha = carregar_arquivo("pagamentos")
-logs, logs_sha = carregar_arquivo("logs")
-
-if vendas.empty:
-    vendas = pd.DataFrame(columns=["id", "segurado", "placa", "data", "seguradora", "premio_liquido", "percentual", "comissao_caio", "status", "observacao"])
-if pagamentos.empty:
-    pagamentos = pd.DataFrame(columns=["id", "id_venda", "valor_pago", "data_pagamento", "observacao"])
-if logs.empty:
-    logs = pd.DataFrame(columns=["data_hora", "tipo_acao", "id_venda", "descricao"])
+vendas = carregar_ou_criar("vendas")
+pagamentos = carregar_ou_criar("pagamentos")
+logs = carregar_ou_criar("logs")
 
 # ---------- FUNÇÃO PARA CALCULAR COMISSÃO ---------- #
-def calcular_comissao_caio(premio_liquido, percentual):
-    return premio_liquido * (percentual / 100)
+def calcular_comissao_caio(premio, percentual):
+    return premio * (percentual / 100)
 
 # ---------- INTERFACE PRINCIPAL ---------- #
 st.markdown("""
@@ -78,7 +77,7 @@ with st.form("nova_venda"):
     col1, col2, col3 = st.columns(3)
     segurado = col1.text_input("Segurado")
     placa = col2.text_input("Placa")
-    data = col3.date_input("Data da Venda", value=datetime.date.today(), format="DD/MM/YYYY")
+    data = col3.date_input("Data da Venda", value=datetime.date.today())
 
     col4, col5 = st.columns(2)
     seguradora = col4.text_input("Seguradora")
@@ -94,7 +93,7 @@ with st.form("nova_venda"):
             "id": str(uuid.uuid4()),
             "segurado": segurado,
             "placa": placa,
-            "data": data.strftime("%d/%m/%Y"),
+            "data": data.strftime("%d/%m/%Y"),  # formato dd/mm/aaaa
             "seguradora": seguradora,
             "premio_liquido": premio_liquido,
             "percentual": percentual,
@@ -122,13 +121,10 @@ for index, row in vendas.iterrows():
         st.write(f"Observações: {row['observacao']}")
 
         if st.button("🗑️ Excluir Venda", key=f"excluir_{index}"):
-            confirmar = st.radio(
-                f"Tem certeza que deseja excluir esta venda de {row['segurado']}?",
-                ["Não", "Sim"],
-                key=f"confirmar_excluir_{index}"
-            )
-            if confirmar == "Sim":
-                vendas = vendas.drop(index)
+            # Mostrar confirmação customizada (usando modal improvisado)
+            confirmar = st.checkbox("Confirmar exclusão", key=f"confirmar_{index}")
+            if confirmar:
+                vendas = vendas.drop(index).reset_index(drop=True)
                 pagamentos = pagamentos[pagamentos['id_venda'] != row['id']]
                 logs = pd.concat([logs, pd.DataFrame.from_records([{
                     "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
@@ -139,21 +135,22 @@ for index, row in vendas.iterrows():
                 vendas.to_csv(ARQUIVOS["vendas"], index=False)
                 pagamentos.to_csv(ARQUIVOS["pagamentos"], index=False)
                 logs.to_csv(ARQUIVOS["logs"], index=False)
-                st.success("Venda excluída com sucesso")
-                st.rerun()
+                st.success("Venda excluída com sucesso!")
+                st.experimental_rerun()
 
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
 if st.button("Baixar Dashboard como Excel"):
     output_excel = vendas.copy()
-    output_excel.to_excel("dashboard_comissoes.xlsx", index=False)
-    st.success("Arquivo Excel gerado com sucesso!")
-    with open("dashboard_comissoes.xlsx", "rb") as file:
-        st.download_button(
-            label="Download Excel",
-            data=file,
-            file_name="dashboard_comissoes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+    # Converter data de string dd/mm/aaaa para formato datetime para formatação correta
+    output_excel['data'] = pd.to_datetime(output_excel['data'], dayfirst=True, errors='coerce')
+    output_excel['Data'] = output_excel['data'].dt.strftime('%d/%m/%Y')
+    output_excel = output_excel.drop(columns=['data'])
+    st.download_button(
+        label="Download Excel",
+        data=output_excel.to_excel(index=False, engine='openpyxl'),
+        file_name="dashboard_comissoes.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 # ---------- LOGS ---------- #
 st.markdown("<h2 style='color: #2c3e50;'>📜 LOGS</h2>", unsafe_allow_html=True)
