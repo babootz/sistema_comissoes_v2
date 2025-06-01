@@ -40,6 +40,21 @@ if senha == login_senha:
 if not login_status:
     st.stop()
 
+# ---------- FUNÇÕES DE CARREGAMENTO DE ARQUIVOS ---------- #
+ARQUIVOS = {
+    "vendas": "vendas.csv",
+    "pagamentos": "pagamentos.csv",
+    "logs": "logs.csv"
+}
+
+# Função para carregar arquivo de forma segura
+def carregar_arquivo(nome):
+    if os.path.exists(ARQUIVOS[nome]):
+        df = pd.read_csv(ARQUIVOS[nome])
+        return df, None
+    else:
+        return pd.DataFrame(), None
+
 # ---------- CARREGAR DADOS ---------- #
 vendas, vendas_sha = carregar_arquivo("vendas")
 pagamentos, pagamentos_sha = carregar_arquivo("pagamentos")
@@ -59,8 +74,9 @@ if file is not None:
     st.write("Planilha importada com sucesso!")
     st.dataframe(df_importado)
     # Salvar a planilha importada
+    df_importado.to_csv(ARQUIVOS["vendas"], index=False)
     vendas = df_importado
-    salvar_arquivo("vendas", vendas, vendas_sha, "Planilha inicial importada")
+    st.success("Planilha salva com sucesso!")
 
 # ---------- INTERFACE PRINCIPAL ---------- #
 st.markdown("""
@@ -102,8 +118,8 @@ with st.form("nova_venda"):
             "id_venda": nova_venda["id"],
             "descricao": f"Venda cadastrada para {segurado}"
         }])], ignore_index=True)
-        salvar_arquivo("vendas", vendas, vendas_sha, "Nova venda cadastrada")
-        salvar_arquivo("logs", logs, logs_sha, "Log atualizado")
+        vendas.to_csv(ARQUIVOS["vendas"], index=False)
+        logs.to_csv(ARQUIVOS["logs"], index=False)
         st.success("Venda salva com sucesso!")
 
 # ---------- EXCLUSÃO DE VENDAS ---------- #
@@ -124,9 +140,9 @@ for index, row in vendas.iterrows():
                     "id_venda": row['id'],
                     "descricao": f"Venda excluída ({row['segurado']})"
                 }])], ignore_index=True)
-                salvar_arquivo("vendas", vendas, vendas_sha, "Venda excluída")
-                salvar_arquivo("pagamentos", pagamentos, pagamentos_sha, "Pagamentos atualizados")
-                salvar_arquivo("logs", logs, logs_sha, "Log atualizado")
+                vendas.to_csv(ARQUIVOS["vendas"], index=False)
+                pagamentos.to_csv(ARQUIVOS["pagamentos"], index=False)
+                logs.to_csv(ARQUIVOS["logs"], index=False)
                 st.success("Venda excluída com sucesso")
 
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
