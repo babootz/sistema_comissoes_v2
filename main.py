@@ -67,16 +67,11 @@ if pagamentos.empty:
 if logs.empty:
     logs = pd.DataFrame(columns=["data_hora", "tipo_acao", "id_venda", "descricao"])
 
-# ---------- IMPORTAÇÃO DA PLANILHA ---------- #
-file = st.file_uploader("Importar Planilha (XLSX)", type=["xlsx"])
-if file is not None:
-    df_importado = pd.read_excel(file, engine='openpyxl')
-    st.write("Planilha importada com sucesso!")
-    st.dataframe(df_importado)
-    # Salvar a planilha importada
-    df_importado.to_csv(ARQUIVOS["vendas"], index=False)
-    vendas = df_importado
-    st.success("Planilha salva com sucesso!")
+# ---------- REMOVIDA A PARTE DE IMPORTAÇÃO DE PLANILHA ---------- #
+
+# ---------- FUNÇÃO PARA CALCULAR COMISSÃO (exemplo) ---------- #
+def calcular_comissao_caio(premio_liquido, percentual):
+    return premio_liquido * percentual / 100
 
 # ---------- INTERFACE PRINCIPAL ---------- #
 st.markdown("""
@@ -99,11 +94,12 @@ with st.form("nova_venda"):
     submitted = st.form_submit_button("Salvar Venda")
     if submitted and segurado:
         comissao_caio = calcular_comissao_caio(premio_liquido, percentual)
+        data_formatada = data.strftime("%d/%m/%Y")  # formata a data para dd/mm/aaaa
         nova_venda = {
             "id": str(uuid.uuid4()),
             "segurado": segurado,
             "placa": placa,
-            "data": data,
+            "data": data_formatada,
             "seguradora": seguradora,
             "premio_liquido": premio_liquido,
             "percentual": percentual,
@@ -148,8 +144,7 @@ for index, row in vendas.iterrows():
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
 if st.button("Baixar Dashboard como Excel"):
     output_excel = vendas.copy()
-    output_excel['Data'] = output_excel['data'].dt.strftime('%d/%m/%Y')
-    output_excel = output_excel.drop(columns=['data'])
+    # Já está em string no formato dd/mm/aaaa, então não precisa formatar
     output_excel.to_excel("dashboard_comissoes.xlsx", index=False)
     st.success("Arquivo Excel gerado com sucesso!")
     st.download_button(
