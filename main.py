@@ -45,6 +45,7 @@ ARQUIVOS = {
     "logs": "logs.csv"
 }
 
+# Função para carregar arquivo de forma segura
 def carregar_arquivo(nome):
     if os.path.exists(ARQUIVOS[nome]):
         df = pd.read_csv(ARQUIVOS[nome])
@@ -53,9 +54,9 @@ def carregar_arquivo(nome):
         return pd.DataFrame(), None
 
 # ---------- CARREGAR DADOS ---------- #
-vendas, _ = carregar_arquivo("vendas")
-pagamentos, _ = carregar_arquivo("pagamentos")
-logs, _ = carregar_arquivo("logs")
+vendas, vendas_sha = carregar_arquivo("vendas")
+pagamentos, pagamentos_sha = carregar_arquivo("pagamentos")
+logs, logs_sha = carregar_arquivo("logs")
 
 if vendas.empty:
     vendas = pd.DataFrame(columns=["id", "segurado", "placa", "data", "seguradora", "premio_liquido", "percentual", "comissao_caio", "status", "observacao"])
@@ -64,19 +65,20 @@ if pagamentos.empty:
 if logs.empty:
     logs = pd.DataFrame(columns=["data_hora", "tipo_acao", "id_venda", "descricao"])
 
+# ---------- FUNÇÃO PARA CALCULAR COMISSÃO ---------- #
+def calcular_comissao_caio(premio_liquido, percentual):
+    return premio_liquido * (percentual / 100)
+
 # ---------- INTERFACE PRINCIPAL ---------- #
 st.markdown("""
     <h2 style='text-align: center;'>📋 Cadastrar Nova Venda</h2>
 """, unsafe_allow_html=True)
 
-def calcular_comissao_caio(valor, percentual):
-    return round((valor * percentual / 100), 2)
-
 with st.form("nova_venda"):
     col1, col2, col3 = st.columns(3)
     segurado = col1.text_input("Segurado")
     placa = col2.text_input("Placa")
-    data = col3.date_input("Data da Venda", value=datetime.date.today())
+    data = col3.date_input("Data da Venda", value=datetime.date.today(), format="DD/MM/YYYY")
 
     col4, col5 = st.columns(2)
     seguradora = col4.text_input("Seguradora")
@@ -102,7 +104,7 @@ with st.form("nova_venda"):
         }
         vendas = pd.concat([vendas, pd.DataFrame([nova_venda])], ignore_index=True)
         logs = pd.concat([logs, pd.DataFrame.from_records([{
-            "data_hora": datetime.datetime.now(),
+            "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
             "tipo_acao": "Cadastro",
             "id_venda": nova_venda["id"],
             "descricao": f"Venda cadastrada para {segurado}"
@@ -129,7 +131,7 @@ for index, row in vendas.iterrows():
                 vendas = vendas.drop(index)
                 pagamentos = pagamentos[pagamentos['id_venda'] != row['id']]
                 logs = pd.concat([logs, pd.DataFrame.from_records([{
-                    "data_hora": datetime.datetime.now(),
+                    "data_hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
                     "tipo_acao": "Exclusão",
                     "id_venda": row['id'],
                     "descricao": f"Venda excluída ({row['segurado']})"
@@ -138,18 +140,20 @@ for index, row in vendas.iterrows():
                 pagamentos.to_csv(ARQUIVOS["pagamentos"], index=False)
                 logs.to_csv(ARQUIVOS["logs"], index=False)
                 st.success("Venda excluída com sucesso")
+                st.rerun()
 
 # ---------- EXPORTAÇÃO PARA EXCEL ---------- #
 if st.button("Baixar Dashboard como Excel"):
     output_excel = vendas.copy()
     output_excel.to_excel("dashboard_comissoes.xlsx", index=False)
     st.success("Arquivo Excel gerado com sucesso!")
-    st.download_button(
-        label="Download Excel",
-        data=output_excel.to_excel(index=False),
-        file_name="dashboard_comissoes.xlsx",
-        mime="application/vnd.ms-excel"
-    )
+    with open("dashboard_comissoes.xlsx", "rb") as file:
+        st.download_button(
+            label="Download Excel",
+            data=file,
+            file_name="dashboard_comissoes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 # ---------- LOGS ---------- #
 st.markdown("<h2 style='color: #2c3e50;'>📜 LOGS</h2>", unsafe_allow_html=True)
