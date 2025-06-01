@@ -68,9 +68,9 @@ if logs.empty:
     logs = pd.DataFrame(columns=["data_hora", "tipo_acao", "id_venda", "descricao"])
 
 # ---------- IMPORTAÇÃO DA PLANILHA ---------- #
-file = st.file_uploader("Importar Planilha (CSV)", type=["csv"])
+file = st.file_uploader("Importar Planilha (XLSX)", type=["xlsx"])
 if file is not None:
-    df_importado = pd.read_csv(file)
+    df_importado = pd.read_excel(file)
     st.write("Planilha importada com sucesso!")
     st.dataframe(df_importado)
     # Salvar a planilha importada
